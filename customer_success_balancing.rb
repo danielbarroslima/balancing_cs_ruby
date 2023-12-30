@@ -1,9 +1,11 @@
 require 'minitest/autorun'
 require 'timeout'
-require 'pry'
+require_relative 'base_methods'
 
-class CustomerSuccessBalancing
+# DOC: class for balancing Customer Success company.
+class CustomerSuccessBalancing < BaseMethods
   def initialize(customer_success, customers, away_customer_success)
+    super()
     @customers = customers
     @customer_success = customer_success
     @away_customer_success = away_customer_success
@@ -11,74 +13,20 @@ class CustomerSuccessBalancing
 
   # Returns the ID of the customer success with most customers
   def execute
-    customer_success_available = only_available(@customer_success, @away_customer_success)
-    sorted_items = elements_sorted(customer_success_available, @customers) # certo
-    min_scores = get_smallest_values(sorted_items) # certo
+    customer_success_available = obtain_employee_available(@customer_success, @away_customer_success)
+    sorted_items = obtain_elements_sorted(customer_success_available, @customers)
+
+    min_scores = get_smallest_values_score(sorted_items)
     return 0 if min_scores[:lowest_employee_score].nil?
 
-    indices_dos_menores = index_lowest_itens(min_scores, sorted_items) # certo
-    employees_with_clients = receive_customers(sorted_items, indices_dos_menores)
-    employee_with_more_customers(employees_with_clients)
-  end
+    index_smallest_customer_and_employee = get_index_lowest_score(min_scores, sorted_items)
+    employees_with_customers = define_operational_customer_assignment(sorted_items, index_smallest_customer_and_employee)
 
-  private
-
-  def index_lowest_itens(min_scores, sorted_items)
-    index_lowest_client = sorted_items[:clients_sorted].find_index { |client| client[:score] == min_scores[:lowest_client_score] }
-    index_lowest_employee = sorted_items[:employee_sorted].find_index { |employee| employee[:score] == min_scores[:lowest_employee_score] }
-
-    { index_lowest_client: index_lowest_client, index_lowest_employee: index_lowest_employee }
-  end
-
-  def get_smallest_values(sorted_items)
-    lowest_client_score   = sorted_items[:clients_sorted].map { |sorted_item| sorted_item[:score] }.min
-    lowest_employee_score = sorted_items[:employee_sorted].find { |sorted_item| sorted_item[:score] >= lowest_client_score }
-
-    { lowest_client_score: lowest_client_score, lowest_employee_score: lowest_employee_score&.dig(:score) }
-  end
-
-  def elements_sorted(employees, clients)
-    clients_sorted = clients.sort_by { |client| client[:score] }
-    employee_sorted = employees.sort_by { |employee| employee[:score] }
-
-    { clients_sorted: clients_sorted, employee_sorted: employee_sorted }
-  end
-
-  def only_available(customers_successes, away_customer_success)
-    customers_available = []
-    customers_successes.each do |customers_success|
-      next if away_customer_success.include?(customers_success[:id])
-
-      customers_available << customers_success
-    end
-
-    customers_available.sort_by { |hash| hash[:score] }
-  end
-
-  def receive_customers(sorted_clients_and_employees, index_lowest_items)
-    sorted_clients_and_employees[:employee_sorted][index_lowest_items[:index_lowest_employee]..].each do |employee|
-      customers_for_employee = sorted_clients_and_employees[:clients_sorted][index_lowest_items[:index_lowest_client]..].select { |customer| customer[:score] <= employee[:score] }
-
-      employee[:clients] = customers_for_employee
-      sorted_clients_and_employees[:clients_sorted] = remove_already_assigned_customers(sorted_clients_and_employees[:clients_sorted], customers_for_employee)
-    end
-  end
-
-  def remove_already_assigned_customers(customers, customers_for_employee)
-    customers.reject do |customer|
-      customers_for_employee.find { |assigned_employee| assigned_employee[:id] == customer[:id] }
-    end
-  end
-
-  def employee_with_more_customers(employees_with_clients)
-    max_clients = employees_with_clients.map { |hash| hash[:clients].size }.max
-    employees_with_much_clients = employees_with_clients.select { |employee| employee[:clients].size == max_clients }
-    return 0 if employees_with_much_clients.size > 1
-
-    employees_with_much_clients.first[:id]
+    inform_employee_with_more_customers(employees_with_customers)
   end
 end
 
+# DOC: Tests class with Minitest.
 class CustomerSuccessBalancingTests < Minitest::Test
   def test_scenario_one
     balancer = CustomerSuccessBalancing.new(
